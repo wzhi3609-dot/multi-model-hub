@@ -1,7 +1,10 @@
 import json
+import logging
 import httpx
 from backend.config import GROQ_API_KEY
 from backend.models.adapters.base import BaseAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class GroqAdapter(BaseAdapter):
@@ -47,7 +50,8 @@ class GroqAdapter(BaseAdapter):
                         content = delta.get("content", "")
                         if content:
                             yield content
-                    except (json.JSONDecodeError, KeyError, IndexError):
+                    except (json.JSONDecodeError, KeyError, IndexError) as e:
+                        logger.warning("Failed to parse SSE chunk: %s | raw: %.200s", e, data_str)
                         continue
 
     async def close(self):

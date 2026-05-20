@@ -1,18 +1,45 @@
 import json
+import os
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from backend.config import MODEL_REGISTRY, TAG_CONFIG
 from backend.schemas import ChatRequest, RoutingRequest
+from backend.models.router import suggest_model
 from backend.services import chat_service, history_service
 
-app = FastAPI(title="Multi-Model Hub", version="1.0.0")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    from backend.db.database import close_db
+    close_db()
+    for adapter in chat_service.adapters.values():
+        await adapter.close()
+
+
+app = FastAPI(title="Multi-Model Hub", version="1.0.0", lifespan=lifespan)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,7 +122,6 @@ async def update_conversation_model(conversation_id: str, model: str = "auto"):
 
 @app.post("/api/route/suggest")
 async def suggest_route(req: RoutingRequest):
-    from backend.models.router import suggest_model
     return suggest_model(req.message)
 
 
@@ -104,11 +130,9 @@ async def health():
     return {"status": "ok"}
 
 
-import os
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.isdir(frontend_dir):
     @app.get("/")
     async def index():
-        from fastapi.responses import FileResponse
         return FileResponse(os.path.join(frontend_dir, "index.html"))
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")

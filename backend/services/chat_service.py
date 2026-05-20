@@ -5,18 +5,18 @@ from backend.models.adapters.groq import GroqAdapter
 from backend.models.adapters.qwen import QwenAdapter
 from backend.config import MODEL_REGISTRY
 
-_adapters = {}
+adapters = {}
 
 
 def _get_adapter(model_key: str, model_config: dict):
-    if model_key not in _adapters:
+    if model_key not in adapters:
         provider = model_config["provider"]
         api_model = model_config["api_model"]
         if provider == "groq":
-            _adapters[model_key] = GroqAdapter(api_model=api_model)
+            adapters[model_key] = GroqAdapter(api_model=api_model)
         elif provider == "qwen":
-            _adapters[model_key] = QwenAdapter(api_model=api_model)
-    return _adapters[model_key]
+            adapters[model_key] = QwenAdapter(api_model=api_model)
+    return adapters[model_key]
 
 
 async def chat_stream(
@@ -37,6 +37,9 @@ async def chat_stream(
 
     if model is None or model == "auto":
         routing = suggest_model(message)
+        if not routing["model"]:
+            yield {"type": "error", "message": routing["reason"]}
+            return
         model = routing["model"]
         yield {"type": "routing", "model": model, "model_name": routing["model_name"],
                "reason": routing["reason"], "matched_tags": routing["matched_tags"]}
@@ -52,9 +55,8 @@ async def chat_stream(
         yield {"type": "routing", "model": model, "model_name": model_config["name"],
                "reason": "指定模型不可用，回退到可用模型", "matched_tags": []}
 
-    db_models.update_conversation_model(conversation_id, model)
-
     db_models.add_message(conversation_id, "user", message)
+    db_models.update_conversation_model(conversation_id, model)
 
     history = db_models.get_messages(conversation_id)
     api_messages = _format_messages(history)
@@ -85,9 +87,7 @@ def _format_messages(history: list[dict]) -> list[dict]:
     result = []
     for msg in history:
         role = msg["role"]
-        if role == "assistant":
-            role = "assistant"
-        elif role == "user":
+        if role not in ("user", "assistant", "system"):
             role = "user"
         result.append({"role": role, "content": msg["content"]})
     return result

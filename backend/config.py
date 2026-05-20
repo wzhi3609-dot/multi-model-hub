@@ -80,7 +80,7 @@ TAG_CONFIG = {
     },
     "creative": {
         "name": "创意",
-        "keywords": ["创意", "点子", "想法", "头脑风暴", "创意", "灵感", "brainstorm",
+        "keywords": ["创意", "点子", "想法", "头脑风暴", "灵感", "brainstorm",
                       "设计", "方案"],
     },
     "translation": {

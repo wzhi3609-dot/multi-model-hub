@@ -285,10 +285,6 @@ async function sendMessage() {
             currentConversationId = resolvedConversationId;
         }
 
-        if (currentConversationId) {
-            await updateModelIfNeeded(resolvedConversationId || currentConversationId, routingInfo);
-        }
-
     } catch (e) {
         bubble.innerHTML = `<span style="color:var(--danger);">请求失败: ${escapeHtml(e.message)}</span>`;
         showToast(e.message, "error");
@@ -297,13 +293,6 @@ async function sendMessage() {
         document.getElementById("sendBtn").disabled = false;
         loadConversations();
     }
-}
-
-async function updateModelIfNeeded(convId, routingInfo) {
-    if (!routingInfo) return;
-    try {
-        await fetch(`/api/conversations/${convId}?model=${routingInfo.model}`, { method: "PUT" });
-    } catch (e) {}
 }
 
 function appendUserMessage(message) {

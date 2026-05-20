@@ -1,15 +1,27 @@
 from backend.config import MODEL_REGISTRY, TAG_CONFIG
 
 
-def suggest_model(message: str) -> dict:
-    """分析用户消息，返回推荐模型及理由"""
-    if not message:
+def _get_fallback():
+    enabled = {k: v for k, v in MODEL_REGISTRY.items() if v["enabled"]}
+    if enabled:
+        first_key = next(iter(enabled))
         return {
-            "model": "deepseek",
-            "model_name": "DeepSeek V3",
+            "model": first_key,
+            "model_name": enabled[first_key]["name"],
             "reason": "默认推荐",
             "matched_tags": ["general"],
         }
+    return {
+        "model": "",
+        "model_name": "无可用模型",
+        "reason": "请先配置 API Key",
+        "matched_tags": [],
+    }
+
+
+def suggest_model(message: str) -> dict:
+    if not message:
+        return _get_fallback()
 
     matched_tags = _match_tags(message)
 
@@ -21,12 +33,7 @@ def suggest_model(message: str) -> dict:
         scores[model_key] = (score, model_info)
 
     if not scores:
-        return {
-            "model": "deepseek",
-            "model_name": "DeepSeek V3",
-            "reason": "无可用模型，回退默认",
-            "matched_tags": [],
-        }
+        return _get_fallback()
 
     best_model_key = max(scores, key=lambda k: scores[k][0])
     best_info = scores[best_model_key][1]
@@ -43,7 +50,6 @@ def suggest_model(message: str) -> dict:
 
 
 def _match_tags(message: str) -> list[str]:
-    """基于关键词匹配标签"""
     text = message.lower()
     matched = set()
 
