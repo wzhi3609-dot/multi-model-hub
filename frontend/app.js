@@ -4,6 +4,7 @@ let isAutoRoute = true;
 let isStreaming = false;
 let modelsData = [];
 let tagsData = {};
+let highlightDebounceTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     init();
@@ -15,6 +16,24 @@ async function init() {
     await loadConversations();
     bindEvents();
     autoResizeTextarea();
+}
+
+function safeMarked(content) {
+    if (window.marked && window.DOMPurify) {
+        return DOMPurify.sanitize(marked.parse(content));
+    }
+    return escapeHtml(content);
+}
+
+function debounceHighlight(bubble) {
+    if (highlightDebounceTimer) {
+        clearTimeout(highlightDebounceTimer);
+    }
+    highlightDebounceTimer = setTimeout(() => {
+        if (window.hljs && bubble) {
+            bubble.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+        }
+    }, 150);
 }
 
 async function loadModels() {
@@ -184,7 +203,7 @@ function renderMessages(messages) {
 function createMessageHTML(msg) {
     const roleClass = msg.role === "user" ? "user" : "assistant";
     const meta = msg.model ? `<div class="message-meta">${msg.model}</div>` : "";
-    const content = msg.role === "assistant" ? marked.parse(msg.content) : escapeHtml(msg.content);
+    const content = msg.role === "assistant" ? safeMarked(msg.content) : escapeHtml(msg.content);
     return `
         <div class="message-row ${roleClass}">
             ${meta}
@@ -256,10 +275,8 @@ async function sendMessage() {
 
                         if (event.type === "token") {
                             fullContent += event.content;
-                            bubble.innerHTML = marked.parse(fullContent);
-                            if (window.hljs) {
-                                bubble.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
-                            }
+                            bubble.innerHTML = safeMarked(fullContent);
+                            debounceHighlight(bubble);
                             scrollToBottom();
                         } else if (event.type === "routing") {
                             routingInfo = event;
@@ -278,6 +295,13 @@ async function sendMessage() {
                         // 忽略解析错误
                     }
                 }
+            }
+        }
+
+        if (highlightDebounceTimer) {
+            clearTimeout(highlightDebounceTimer);
+            if (window.hljs && bubble) {
+                bubble.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
             }
         }
 

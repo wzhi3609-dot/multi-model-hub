@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from typing import AsyncGenerator
 from backend.db import models as db_models
 from backend.models.router import suggest_model
@@ -5,17 +7,25 @@ from backend.models.adapters.groq import GroqAdapter
 from backend.models.adapters.qwen import QwenAdapter
 from backend.config import MODEL_REGISTRY
 
+logger = logging.getLogger(__name__)
+
 adapters = {}
+_lock = asyncio.Lock()
+MAX_HISTORY_MESSAGES = 30
+MAX_RETRIES = 2
+RETRY_BASE_DELAY = 1.0
 
 
-def _get_adapter(model_key: str, model_config: dict):
+async def _get_adapter(model_key: str, model_config: dict):
     if model_key not in adapters:
-        provider = model_config["provider"]
-        api_model = model_config["api_model"]
-        if provider == "groq":
-            adapters[model_key] = GroqAdapter(api_model=api_model)
-        elif provider == "qwen":
-            adapters[model_key] = QwenAdapter(api_model=api_model)
+        async with _lock:
+            if model_key not in adapters:
+                provider = model_config["provider"]
+                api_model = model_config["api_model"]
+                if provider == "groq":
+                    adapters[model_key] = GroqAdapter(api_model=api_model)
+                elif provider == "qwen":
+                    adapters[model_key] = QwenAdapter(api_model=api_model)
     return adapters[model_key]
 
 
@@ -61,11 +71,11 @@ async def chat_stream(
     history = db_models.get_messages(conversation_id)
     api_messages = _format_messages(history)
 
-    adapter = _get_adapter(model, model_config)
+    adapter = await _get_adapter(model, model_config)
     full_response = ""
 
     try:
-        async for token in adapter.chat_stream(api_messages):
+        async for token in _stream_with_retry(adapter, api_messages):
             full_response += token
             yield {"type": "token", "content": token}
 
@@ -80,11 +90,30 @@ async def chat_stream(
         yield {"type": "done"}
 
     except Exception as e:
+        logger.error("Chat stream error for model %s: %s", model, e)
         yield {"type": "error", "message": str(e)}
+
+
+async def _stream_with_retry(adapter, messages, retries=MAX_RETRIES):
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            async for token in adapter.chat_stream(messages):
+                yield token
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < retries:
+                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                logger.warning("Retry %d/%d after %.1fs: %s", attempt + 1, retries, delay, e)
+                await asyncio.sleep(delay)
+    raise last_error
 
 
 def _format_messages(history: list[dict]) -> list[dict]:
     result = []
+    if len(history) > MAX_HISTORY_MESSAGES:
+        history = history[-MAX_HISTORY_MESSAGES:]
     for msg in history:
         role = msg["role"]
         if role not in ("user", "assistant", "system"):
