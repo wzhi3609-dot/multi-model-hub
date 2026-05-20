@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Model Hub</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <aside id="sidebar" class="sidebar">
+            <button id="newChatBtn" class="new-chat-btn">+ 新建对话</button>
+            <div id="conversationList" class="conversation-list"></div>
+        </aside>
+
+        <main class="main-area">
+            <div id="chatContainer" class="chat-container">
+                <div id="messageArea" class="message-area">
+                    <div class="welcome-screen">
+                        <h1>Multi-Model Hub</h1>
+                        <p>集成多模型，智能调度。开始对话吧！</p>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <div class="input-options">
+                        <div class="routing-toggle">
+                            <label class="switch-label">
+                                <input type="checkbox" id="autoRouteToggle" checked>
+                                <span class="switch-slider"></span>
+                                <span class="switch-text">自动路由</span>
+                            </label>
+                        </div>
+                        <select id="modelSelect" class="model-select" disabled>
+                            <option value="auto">自动选择</option>
+                        </select>
+                        <button id="sendBtn" class="send-btn" title="Ctrl+Enter 发送">发送</button>
+                    </div>
+                    <textarea
+                        id="userInput"
+                        class="user-input"
+                        placeholder="输入消息，Ctrl+Enter 发送..."
+                        rows="1"
+                    ></textarea>
+                </div>
+            </div>
+
+            <aside id="modelPanel" class="model-panel">
+                <h3>可用模型</h3>
+                <div id="modelList" class="model-list"></div>
+                <div class="panel-divider"></div>
+                <h3>标签说明</h3>
+                <div id="tagList" class="tag-list"></div>
+            </aside>
+        </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
